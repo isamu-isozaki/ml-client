@@ -64,17 +64,21 @@ print("*** Loaded.. now Inference...:")
 
 app = FastAPI(title="BGE-embedding")
 
-def embedding_request(input: Union[str, List[str], List[List[int]]], tempmodel: str = 'BGE'):
+def embedding_request(input: Union[str, List[str], List[List[int]]], model_name: str):
     if isinstance(input, str):
         input = [input]  # Convert single string to list
     elif isinstance(input, list) and all(isinstance(i, list) for i in input):
         enc = tiktoken.get_encoding("cl100k_base")
         input = [enc.decode(i) for i in input]
-    encoded_input = tokenizer(input, padding=True, truncation=True, return_tensors='pt').to("cuda")
-    print(encoded_input)
 
     with torch.no_grad():
-        model_output = model(**encoded_input)
+        if model_name == 'gte-large-en-v1.5':
+            encoded_input = tokenizer(input, padding=True, truncation=True, return_tensors='pt').to("cuda")
+            model_output = model(**encoded_input)
+        elif model_name == 'bge-reranker-large':
+            encoded_input = tokenizer_rerank(input, padding=True, truncation=True, return_tensors='pt').to("cuda")
+            model_output = model_rerank(**encoded_input)
+
         # Perform pooling. In this case, cls pooling.
         sentence_embeddings = model_output[0][:, 0]
     # normalize embeddings
@@ -85,7 +89,7 @@ def embedding_request(input: Union[str, List[str], List[List[int]]], tempmodel: 
 
     response_data = {
         "object": "list",
-        "model": tempmodel,
+        "model": model_name,
         "data": [
             {
                 "object": "embedding",
@@ -135,7 +139,7 @@ async def main(request: CompletionRequest):
 
     response_data = None
     try:
-        response_data = embedding_request(request.input)
+        response_data = embedding_request(request.input, request.model)
     
     except Exception as e:
         # Handle exception...
