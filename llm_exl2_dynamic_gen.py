@@ -358,7 +358,6 @@ class RequestLoggerMiddleware(BaseHTTPMiddleware):
         print(f"Outgoing response status: {response.status_code}")
         return response
 
-    app.add_middleware(RequestLoggerMiddleware)
 # take from https://github.com/tiangolo/fastapi/discussions/11360
 class RequestCancelledMiddleware:
     def __init__(self, app):
