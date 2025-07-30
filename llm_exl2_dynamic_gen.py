@@ -37,8 +37,7 @@ from exllamav2.generator import ExLlamaV2DynamicGenerator, ExLlamaV2DynamicJob, 
 import uuid
 from blessed import Terminal
 import textwrap
-from outlines.integrations.exllamav2 import RegexFilter, TextFilter, JSONFilter, ChoiceFilter
-from util import format_prompt_llama3, format_prompt, format_prompt_tess, format_prompt_commandr
+from outlines.integrations.exllamav2 import RegexFilter, JSONFilter, ChoiceFilter
 from util_merge import ExLlamaV2MergePassthrough
 
 def generate_unique_id():
