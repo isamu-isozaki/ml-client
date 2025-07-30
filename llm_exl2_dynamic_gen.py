@@ -346,7 +346,14 @@ prompt_ids2jobs = {}
 cancelled_request_ids = []
 
 print("*** Loaded.. now Inference...:")
+class RequestLoggerMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        print(f"Incoming request: {request.method} {request.url}")
+        response = await call_next(request)
+        print(f"Outgoing response status: {response.status_code}")
+        return response
 
+    app.add_middleware(RequestLoggerMiddleware)
 # take from https://github.com/tiangolo/fastapi/discussions/11360
 class RequestCancelledMiddleware:
     def __init__(self, app):
@@ -399,6 +406,7 @@ class RequestCancelledMiddleware:
 
 
 app = FastAPI(title="EXL2")
+app.add_middleware(RequestLoggerMiddleware)
 app.add_middleware(RequestCancelledMiddleware)
 
 async def stream_response(prompt_id, timeout=180):
@@ -629,6 +637,7 @@ worker.start()
 
 @app.post('/v1/chat/completions')
 async def mainchat(requestid: Request, request: ChatCompletionRequest):
+    print("got chat completions request")
     try:
         hf_get_messages = get_messages(request.messages)
         prompt = hf_tokenizer.apply_chat_template(hf_get_messages, tokenize=False, add_generation_prompt=True)
