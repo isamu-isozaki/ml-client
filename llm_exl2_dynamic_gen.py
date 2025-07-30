@@ -60,6 +60,12 @@ class CompletionRequest(BaseModel):
     suffix: Optional[str] = None
     top_p: Optional[float] = 0.0  # default value of 0.0
     user: Optional[str] = None
+    stop_at: Optional[str] = None
+    outlines_type: Optional[str] = None
+    choices: Optional[list[str]] = None
+    regex: Optional[str] = None
+    json: Optional[str] = None
+    request_id: Optional[str] = None
 
 class Message(BaseModel):
     role: str
@@ -425,7 +431,7 @@ async def stream_response(prompt_id, timeout=180):
             if prompt_id in responses:
                 final_response = responses.pop(prompt_id)
                 yield f'data: {{"id":"chatcmpl-{prompt_id}","object":"chat.completion.chunk","created":{int(time.time())},"model":"{repo_str}","choices":[{{"index":0,"delta":{{}},"finish_reason":"stop"}}]}}\n\n'
-                break
+                breakCompletionRequest
 
 
 def process_prompts():
@@ -634,17 +640,8 @@ def process_prompts():
 worker = Thread(target=process_prompts)
 worker.start()
 
-
-@app.post('/v1/chat/completions')
-async def mainchat(requestid: Request, request: ChatCompletionRequest):
-    print("got chat completions request")
+async def do_completion(requestid: Request, prompt: str, request):
     try:
-        hf_get_messages = get_messages(request.messages)
-        prompt = hf_tokenizer.apply_chat_template(hf_get_messages, tokenize=False, add_generation_prompt=True)
-        if request.partial_generation is not None:
-            prompt += request.partial_generation
-        
-
         timeout = 180  # seconds
         start_time = time.time()
         prompt_id = requestid.scope.get("extensions", {}).get("request_id", "Unknown ID")
@@ -691,6 +688,21 @@ async def mainchat(requestid: Request, request: ChatCompletionRequest):
     except Exception as e:
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post('/v1/completions')
+async def maincompletion(requestid: Request, request: CompletionRequest):
+    print("got completions request")
+    assert isinstance(request.prompt, str)
+    return await do_completion(requestid, request.prompt, request)
+
+@app.post('/v1/chat/completions')
+async def mainchat(requestid: Request, request: ChatCompletionRequest):
+    print("got chat completions request")
+    hf_get_messages = get_messages(request.messages)
+    prompt = hf_tokenizer.apply_chat_template(hf_get_messages, tokenize=False, add_generation_prompt=True)
+    if request.partial_generation is not None:
+        prompt += request.partial_generation
+    return await do_completion(requestid, prompt, request)
 
 
 
