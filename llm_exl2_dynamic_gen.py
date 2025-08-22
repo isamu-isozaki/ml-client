@@ -468,7 +468,7 @@ def process_prompts():
                     #streamer.append(stream)
                     #prompt_ids.append(prompt_id)
 
-                    eos_token_ids = [tokenizer.eos_token_id]
+                    eos_token_ids = [tokenizer.eos_token_id, hf_tokenizer.eos_token_id]
                     if config_eos_token_ids is not None:
                         eos_token_ids.extend([int(c) for c in config_eos_token_ids.split(',')])
                     if stop_at is not None:
