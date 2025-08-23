@@ -469,7 +469,7 @@ def process_prompts():
                     #prompt_ids.append(prompt_id)
 
                     eos_token_ids = [tokenizer.eos_token_id, hf_tokenizer.eos_token_id]
-                    print("eos token ids", eos_token_ids)
+                    # print("eos token ids", eos_token_ids)
                     if config_eos_token_ids is not None:
                         eos_token_ids.extend([int(c) for c in config_eos_token_ids.split(',')])
                     if stop_at is not None:
