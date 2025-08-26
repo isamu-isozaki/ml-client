@@ -59,7 +59,6 @@ class CompletionRequest(BaseModel):
     suffix: Optional[str] = None
     top_p: Optional[float] = 0.0  # default value of 0.0
     user: Optional[str] = None
-    stop_at: Optional[str] = None
     outlines_type: Optional[str] = None
     choices: Optional[list[str]] = None
     regex: Optional[str] = None
@@ -83,7 +82,6 @@ class ChatCompletionRequest(BaseModel):
     n: Optional[int] = 1  # default value of 1, batch size
     top_p: Optional[float] = 0.0  # default value of 0.0
     user: Optional[str] = None
-    stop_at: Optional[str] = None
     outlines_type: Optional[str] = None
     choices: Optional[list[str]] = None
     regex: Optional[str] = None
@@ -473,8 +471,7 @@ def process_prompts():
                     if config_eos_token_ids is not None:
                         eos_token_ids.extend([int(c) for c in config_eos_token_ids.split(',')])
                     if stop is not None:
-                        for stop_string in stop:
-                            eos_token_ids.append(stop_string)
+                        eos_token_ids.append(stop)
                                    
                     gen_settings = ExLlamaV2Sampler.Settings()
                     gen_settings.temperature = 2.0 if temperature>2 else temperature  # To make sure the temperature value does not exceed 2
@@ -492,7 +489,7 @@ def process_prompts():
                     job.input_ids = ids
                     job.streamer = stream
                     job.prompt_ids = prompt_id
-                    job.stop_at = stop_at
+                    job.stop = stop
 
                     generator.enqueue(job)
                     #displays = { job: JobStatusDisplay(job, line, STATUS_LINES) for line, job in enumerate(jobs) }
@@ -513,8 +510,8 @@ def process_prompts():
                         outcontent = r.get("text", "")
                         reason = None
                         if(job.streamer):
-                            if r["eos"] and job.stop_at is not None:
-                                outcontent += job.stop_at
+                            if r["eos"] and job.stop is not None:
+                                outcontent += job.stop
                             partial_response_data = {
                                 "id": f"chatcmpl-{job.prompt_ids}",
                                 "object": "chat.completion.chunk",
@@ -566,8 +563,8 @@ def process_prompts():
 
                                 responses[eos_prompt_id] = partial_response_data
                             else:# Construct the response based on the format
-                                if job.stop_at is not None:
-                                    generated_text += job.stop_at
+                                if job.stop is not None:
+                                    generated_text += job.stop
                                 response_data = {
                                     "id": f"chatcmpl-{eos_prompt_id}",
                                     "object": "chat.completion",
