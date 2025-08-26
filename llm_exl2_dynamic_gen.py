@@ -441,7 +441,7 @@ def process_prompts():
             while not prompts.empty() or len(prompt_length):
                 while len(prompt_length) < max_batch_size and not prompts.empty():
                     prompt_id, prompt, max_tokens, stream, temperature, outlines_dict = prompts.get()
-                    stop_at = outlines_dict.get("stop_at", None)
+                    stop = outlines_dict.get("stop", None)
                     if outlines_dict["type"] == "choices":
                         filters = [ChoiceFilter(outlines_dict["choices"], hf_tokenizer)]
                     elif outlines_dict["type"] == "json":
@@ -472,8 +472,9 @@ def process_prompts():
                     # print("eos token ids", eos_token_ids)
                     if config_eos_token_ids is not None:
                         eos_token_ids.extend([int(c) for c in config_eos_token_ids.split(',')])
-                    if stop_at is not None:
-                        eos_token_ids.append(stop_at)
+                    if stop is not None:
+                        for stop_string in stop:
+                            eos_token_ids.append(stop_string)
                                    
                     gen_settings = ExLlamaV2Sampler.Settings()
                     gen_settings.temperature = 2.0 if temperature>2 else temperature  # To make sure the temperature value does not exceed 2
@@ -652,8 +653,8 @@ async def do_completion(requestid: Request, prompt: str, request):
         if request.temperature == 0:
             request.temperature = 0.001
 
-        if request.stop_at is not None:
-            outlines_dict["stop_at"] = request.stop_at
+        if request.stop is not None:
+            outlines_dict["stop"] = request.stop
         if request.outlines_type is not None:
             outlines_dict["type"] = request.outlines_type
         else:
