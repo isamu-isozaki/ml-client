@@ -426,7 +426,7 @@ async def stream_response(prompt_id, timeout=180):
             # Check for final response or timeout
             if prompt_id in responses:
                 final_response = responses.pop(prompt_id)
-                yield f'data: {{"id":"chatcmpl-{prompt_id}","object":"chat.completion.chunk","created":{int(time.time())},"model":"{repo_str}","choices":[{{"delta":{"index": 0, "content": ""},"finish_reason":"stop"}}]}}\n\n'
+                yield f'data: {{"id":"chatcmpl-{prompt_id}","object":"chat.completion.chunk","created":{int(time.time())},"model":"{repo_str}","choices":[{{"index": 0, "delta":{"content": None},"finish_reason":"stop"}}]}}\n\n'
                 break
 
 
@@ -519,11 +519,11 @@ def process_prompts():
                                 "model": repo_str,
                                 "choices": [
                                     {
+                                        "index": 0,
                                         "delta": {
-                                            "index": 0,
-                                            "content": outcontent,
-                                            "finish_reason": reason
-                                        }
+                                            "content": outcontent
+                                        },
+                                        "finish_reason": None
                                     }
                                 ]
                             }
