@@ -514,7 +514,10 @@ def process_prompts():
                         reason = None
                         if(job.streamer):
                             if r["eos"] and job.stop is not None:
-                                outcontent += job.stop
+                                if isinstance(job.stop, list):
+                                    outcontent += job.stop[0]
+                                else:
+                                    outcontent += job.stop
                             partial_response_data = {
                                 "id": f"chatcmpl-{job.prompt_ids}",
                                 "object": "chat.completion.chunk",
