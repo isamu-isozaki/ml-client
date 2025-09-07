@@ -513,11 +513,7 @@ def process_prompts():
                         outcontent = r.get("text", "")
                         reason = None
                         if(job.streamer):
-                            if r["eos"] and job.stop is not None:
-                                if isinstance(job.stop, list):
-                                    outcontent += job.stop[0]
-                                else:
-                                    outcontent += job.stop
+
                             partial_response_data = {
                                 "id": f"chatcmpl-{job.prompt_ids}",
                                 "object": "chat.completion.chunk",
@@ -569,11 +565,6 @@ def process_prompts():
 
                                 responses[eos_prompt_id] = partial_response_data
                             else:# Construct the response based on the format
-                                if job.stop is not None:
-                                    if isinstance(job.stop, list):
-                                        generated_text += job.stop[0]
-                                    else:
-                                        generated_text += job.stop
                                 response_data = {
                                     "id": f"chatcmpl-{eos_prompt_id}",
                                     "object": "chat.completion",
