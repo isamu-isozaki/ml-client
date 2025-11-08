@@ -317,6 +317,7 @@ lora = None
 #)
 
 # Initialize the generator
+print("Getting generator")
 
 generator = ExLlamaV2DynamicGenerator(
     model = model,
@@ -329,7 +330,7 @@ generator = ExLlamaV2DynamicGenerator(
     max_chunk_size = max_chunk_size,
     paged = paged,
 )
-
+print("Got generator")
 if lora is not None:
     generator.set_loras(lora)
 
