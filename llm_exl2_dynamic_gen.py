@@ -278,16 +278,20 @@ config.max_attention_size = max_chunk_size ** 2
 #ropescale = 2.5
 #config.scale_alpha_value = ropescale
 config.max_seq_len = max_context
+print("Loading model")
 model = ExLlamaV2(config)
-
+print("Loaded model")
 # Configure the cache. The dynamic generator expects a batch size of 1 and a max_seq_len equal to
 # the total number of cached tokens. The flat cache will be split dynamically
+print("Loading cache")
 
 cache = ExLlamaV2Cache_Q4(
     model,
     max_seq_len = total_context,
     lazy = True
 )
+print("Loaded cache")
+
 
 model.load_autosplit(cache, progress = True)
 # Also, tokenizer
