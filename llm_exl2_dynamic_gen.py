@@ -129,8 +129,8 @@ parser = argparse.ArgumentParser(description='Run server with specified port.')
 # Add argument for port with default type as integer
 parser.add_argument('--port', type=int, help='Port to run the server on.')
 parser.add_argument('--repo_str', type=str, default='llama3-70b-instruct', help='The model repository name')
-parser.add_argument('--max_chunk_size', type=int, default=2048, help='Max chunk size.')
-parser.add_argument('--max_new_tokens', type=int, default=2048, help='Max new tokens.')
+parser.add_argument('--max_chunk_size', type=int, default=15872, help='Max chunk size.')
+parser.add_argument('--max_new_tokens', type=int, default=15872, help='Max new tokens.')
 parser.add_argument('--use_draft_model', action="store_true", help='Do speculative decoding')
 parser.add_argument('--not_paged', action="store_true", help='Do not do paged attention')
 
