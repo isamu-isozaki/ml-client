@@ -143,7 +143,7 @@ parser.add_argument("-sl", "--stream_layers", action="store_true", help="Load mo
 parser.add_argument("-sp", "--standard_perplexity", choices=["wiki2"], help="Run standard (HF) perplexity test, stride 512 (experimental)")
 parser.add_argument("-rr", "--rank_reduce", type=str, help="Rank-reduction for MLP layers of model, in reverse order (for experimentation)")
 parser.add_argument("-mol", "--max_output_len", type=int, help="Set max output chunk size (incompatible with ppl tests)")
-
+model_init.add_args(parser)
 # Parse the arguments
 args = parser.parse_args()
 repo_str = args.repo_str
