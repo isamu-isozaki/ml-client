@@ -30,8 +30,41 @@ from exllamav2 import(
     ExLlamaV2Cache,
     ExLlamaV2Cache_8bit,
     ExLlamaV2Cache_Q4,
+    ExLlamaV2Cache_Q6,
+    ExLlamaV2Cache_Q8,
+    ExLlamaV2Cache_TP,
     ExLlamaV2Tokenizer,
+    model_init,
 )
+
+from exllamav2.generator import (
+    ExLlamaV2BaseGenerator,
+    ExLlamaV2Sampler
+)
+
+from exllamav2.attn import ExLlamaV2Attention
+from exllamav2.mlp import ExLlamaV2MLP
+from exllamav2.moe_mlp import ExLlamaV2MoEMLP
+from exllamav2.parallel_decoder import ExLlamaV2ParallelDecoder
+
+import argparse, os, math, time
+import torch
+import torch.nn.functional as F
+from exllamav2.conversion.tokenize import get_tokens
+from exllamav2.conversion.quantize import list_live_tensors
+import gc
+
+# from exllamav2.mlp import set_catch
+
+import sys
+import json
+
+torch.cuda._lazy_init()
+torch.set_printoptions(precision = 5, sci_mode = False, linewidth = 150)
+
+# torch.backends.cuda.matmul.allow_tf32 = True
+# torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+# torch.set_float32_matprec("medium")
 
 from exllamav2.generator import ExLlamaV2DynamicGenerator, ExLlamaV2DynamicJob, ExLlamaV2Sampler
 import uuid
@@ -101,7 +134,27 @@ parser.add_argument('--max_new_tokens', type=int, default=2048, help='Max new to
 parser.add_argument('--use_draft_model', action="store_true", help='Do speculative decoding')
 parser.add_argument('--not_paged', action="store_true", help='Do not do paged attention')
 
-
+# Add arguments from the new model loading code
+parser.add_argument("-ed", "--eval_dataset", type=str, help="Perplexity evaluation dataset (.parquet file)")
+parser.add_argument("-er", "--eval_rows", type=int, default=None, help="Number of rows to apply from dataset (default 128)")
+parser.add_argument("-el", "--eval_length", type=int, default=2048, help="Max no. tokens per sample")
+parser.add_argument("-et", "--eval_token", action="store_true", help="Evaluate perplexity on token-by-token inference using cache")
+parser.add_argument("-e8", "--eval_token_8bit", action="store_true", help="Evaluate perplexity on token-by-token inference using 8-bit (FP8) cache")
+parser.add_argument("-eq4", "--eval_token_q4", action="store_true", help="Evaluate perplexity on token-by-token inference using Q4 cache")
+parser.add_argument("-eq6", "--eval_token_q6", action="store_true", help="Evaluate perplexity on token-by-token inference using Q6 cache")
+parser.add_argument("-eq8", "--eval_token_q8", action="store_true", help="Evaluate perplexity on token-by-token inference using Q8 cache")
+parser.add_argument("-ecl", "--eval_context_lens", action="store_true", help="Evaluate perplexity at range of context lengths")
+parser.add_argument("-p", "--prompt", type=str, help="Generate from prompt (basic sampling settings)")
+parser.add_argument("-pnb", "--prompt_no_bos", action="store_true", help="Don't add BOS token to prompt")
+parser.add_argument("-t", "--tokens", type=int, default=128, help="Max no. tokens")
+parser.add_argument("-ps", "--prompt_speed", action="store_true", help="Test prompt processing (batch) speed over context length")
+parser.add_argument("-s", "--speed", action="store_true", help="Test raw generation speed over context length")
+parser.add_argument("-mix", "--mix_layers", type=str, help="Load replacement layers from secondary model. Example: --mix_layers 1,6-7:/mnt/models/other_model")
+parser.add_argument("-nwu", "--no_warmup", action="store_true", help="Skip warmup before testing model")
+parser.add_argument("-sl", "--stream_layers", action="store_true", help="Load model layer by layer (perplexity evaluation only)")
+parser.add_argument("-sp", "--standard_perplexity", choices=["wiki2"], help="Run standard (HF) perplexity test, stride 512 (experimental)")
+parser.add_argument("-rr", "--rank_reduce", type=str, help="Rank-reduction for MLP layers of model, in reverse order (for experimentation)")
+parser.add_argument("-mol", "--max_output_len", type=int, help="Set max output chunk size (incompatible with ppl tests)")
 
 # Parse the arguments
 args = parser.parse_args()
@@ -171,20 +224,20 @@ class JobStatusDisplay:
         stage = r["stage"]
         stage = r.get("eos_reason", stage)
 
-        self.collected_output += r.get("text", "").replace("\n", "\\n")
+        self.collected_output += r.get("极text", "").replace("\n", "\\n")
 
         token_ids = r.get("token_ids", None)
         if token_ids is not None: self.tokens += token_ids.shape[-1]
 
         self.prefill = r.get("curr_progress", self.prefill)
-        self.max_prefill = r.get("max_progress", self.max_prefill)
+        self.max_prefill = r.get("极progress", self.max_prefill)
 
         text = term.black(f"{self.console_line:3}:")
         text += term.blue(f"{stage:16}")
         text += "prefill [ " + term.yellow(f"{self.prefill: 5} / {self.max_prefill: 5}")+" ]"
         text += "   "
         text += term.green(f"{self.tokens: 5} t")
-        text += term.black(" -> ")
+       极 += term.black(" -> ")
         output_length = term.width - len(text) +20
         text += (self.spaces + self.collected_output)[-output_length:].replace("\t", " ")
 
@@ -246,10 +299,99 @@ max_new_tokens = args.max_new_tokens
 # Demonstrate token healing
 healing = True
 
+# Initialize model and tokenizer using the new approach
+print("Initializing model with new approach...")
 
+# Check conflicting settings
+if hasattr(args, 'stream_layers') and args.stream_layers:
+    if hasattr(args, 'gpu_split') and args.gpu_split:
+        print(" ## Can only use one GPU when streaming layers")
+        sys.exit()
 
+# Init model with new approach
+model_init.check_args(args)
+model_init.print_options(args)
+model, tokenizer = model_init.init(
+    args,
+    allow_auto_split = True,
+    skip_load = hasattr(args, 'stream_layers') and args.stream_layers,
+    benchmark = True,
+    max_output_len = hasattr(args, 'max_output_len') and args.max_output_len,
+    progress = True
+)
+cache = None
+
+# Auto split
+if not model.loaded and not (hasattr(args, 'stream_layers') and args.stream_layers):
+
+    if hasattr(args, 'mix_layers') and args.mix_layers:
+        print(" !! Warning, auto split does not account for VRAM requirement of replacement layers")
+
+    print(" -- Loading model...")
+    cache = ExLlamaV2Cache_Q4(model, lazy = True)
+    t = time.time()
+    model.load_autosplit(cache, progress = True)
+    t = time.time() - t
+    print(f" -- Loaded model in {t:.4f} seconds")
+
+if hasattr(args, 'stream_layers') and args.stream_layers:
+
+    stream_batch_size = 2
+    model.config.max_batch_size = stream_batch_size
+    model.load(lazy = True)
+
+# Rank reduction
+if hasattr(args, 'rank_reduce') and args.rank_reduce:
+
+    if hasattr(args, 'stream_layers') and args.stream_layers:
+        print(" ## --rank_reduce can not be combined with --stream_layers")
+        sys.exit()
+
+    rr = args.rank_reduce.split(",")
+    idx = len(model.modules) - 1
+    for r in rr:
+        k = float(r)
+
+        while True:
+            idx -= 1
+            module = model.modules[idx]
+            if isinstance(module, ExLlamaV2ParallelDecoder): break
+            if isinstance(module, ExLlamaV2MLP): break
+            if isinstance(module, ExLlamaV2MoEMLP): break
+            if idx < 0:
+                print(" ## Not enough layers")
+                sys.exit()
+
+        print(f" -- Reducing {module.key} ({module.name}) to {k * 100:.2f}%")
+        module.rank_reduce(k)
+
+# Replacement
+if hasattr(args, 'mix_layers') and args.mix_layers:
+    intervals_, extra_dir = args.mix_layers.split(":")
+
+    print(f" -- Loading replacement layers from: {extra_dir}")
+
+    extra_config = ExLlamaV2Config()
+    extra_config.model_dir = extra_dir
+    extra_config.prepare()
+    intervals = intervals_.split(",")
+    for interval in intervals:
+        ab = interval.split("-")
+        a, b = int(ab[0]), int(ab[-1])
+        for idx in range(a, b + 1):
+            print(f" --   Layer {idx}...")
+            layerkey = "model.layers." + str(idx) + "."
+            remove = [k for k in model.config.tensor_file_map.keys() if k.startswith(layerkey)]
+            replace = [极 for k in extra_config.tensor_file_map.keys() if k.startswith(layerkey)]
+            for k in remove: del model.config.tensor_file_map[k]
+            for k in replace: model.config.tensor_file_map[k] = extra_config.tensor_file_map[k]
+            if not (hasattr(args, 'stream_layers') and args.stream_layers):
+                model.modules[idx * 2 + 1].reload()
+                model.modules[idx * 2 + 2].reload()
+
+# Set up draft model if using speculative decoding
 if use_draft_model:
-
+    print("Setting up draft model for speculative decoding...")
     draft_config = ExLlamaV2Config(draft_model_dir)
     draft_config.scale_alpha_value = 6.0
     draft_config.max_seq_len = max_context
@@ -262,42 +404,11 @@ if use_draft_model:
     )
 
     draft_model.load_autosplit(draft_cache, progress = True)
-
 else:
-
     draft_model = None
     draft_cache = None
 
-# Create config. We use the default max_batch_size of 1 for the model and the default max_input_len of
-# 2048, which will also be the limit of the chunk size for prefill used by the dynamic generator.
-
-config = ExLlamaV2Config(model_dir)
-config.max_input_len = max_chunk_size
-config.max_attention_size = max_chunk_size ** 2
-
-#ropescale = 2.5
-#config.scale_alpha_value = ropescale
-config.max_seq_len = max_context
-print("Loading model")
-model = ExLlamaV2(config)
-print("Loaded model")
-# Configure the cache. The dynamic generator expects a batch size of 1 and a max_seq_len equal to
-# the total number of cached tokens. The flat cache will be split dynamically
-print("Loading cache")
-
-cache = ExLlamaV2Cache_Q4(
-    model,
-    max_seq_len = total_context,
-    lazy = True
-)
-print("Loaded cache")
-
-
-model.load_autosplit(cache, progress = True)
-# Also, tokenizer
-
-print("Loading tokenizer...")
-tokenizer = ExLlamaV2Tokenizer(config)
+print("Model initialization complete")
 hf_tokenizer_kwargs = {}
 hf_tokenizer_kwargs.setdefault("padding_side", "left")
 hf_tokenizer = AutoTokenizer.from_pretrained(model_dir, **hf_tokenizer_kwargs)
