@@ -212,20 +212,20 @@ class JobStatusDisplay:
         stage = r["stage"]
         stage = r.get("eos_reason", stage)
 
-        self.collected_output += r.get("极text", "").replace("\n", "\\n")
+        self.collected_output += r.get("text", "").replace("\n", "\\n")
 
         token_ids = r.get("token_ids", None)
         if token_ids is not None: self.tokens += token_ids.shape[-1]
 
         self.prefill = r.get("curr_progress", self.prefill)
-        self.max_prefill = r.get("极progress", self.max_prefill)
+        self.max_prefill = r.get("max_progress", self.max_prefill)
 
         text = term.black(f"{self.console_line:3}:")
         text += term.blue(f"{stage:16}")
         text += "prefill [ " + term.yellow(f"{self.prefill: 5} / {self.max_prefill: 5}")+" ]"
         text += "   "
         text += term.green(f"{self.tokens: 5} t")
-       极 += term.black(" -> ")
+        text += term.black(" -> ")
         output_length = term.width - len(text) +20
         text += (self.spaces + self.collected_output)[-output_length:].replace("\t", " ")
 
