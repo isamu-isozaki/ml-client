@@ -303,7 +303,7 @@ model, tokenizer = model_init.init(
     args,
     allow_auto_split = True,
     skip_load = hasattr(args, 'stream_layers') and args.stream_layers,
-    benchmark = False,
+    benchmark = True,
     max_output_len = hasattr(args, 'max_output_len') and args.max_output_len,
     progress = True
 )
