@@ -422,32 +422,32 @@ lora = None
 # Initialize the generator
 print("Getting generator")
 
-# generator = ExLlamaV2DynamicGenerator(
-#     model = model,
-#     cache = cache,
-#     draft_model = draft_model,
-#     draft_cache = draft_cache,
-#     tokenizer = tokenizer,
-#     max_batch_size = max_batch_size,
-#     use_ngram_draft = use_ngram,
-#     max_chunk_size = max_chunk_size,
-#     paged = paged,
-# )
-# print("Got generator")
-# if lora is not None:
-#     generator.set_loras(lora)
+generator = ExLlamaV2DynamicGenerator(
+    model = model,
+    cache = cache,
+    draft_model = draft_model,
+    draft_cache = draft_cache,
+    tokenizer = tokenizer,
+    max_batch_size = max_batch_size,
+    use_ngram_draft = use_ngram,
+    max_chunk_size = max_chunk_size,
+    paged = paged,
+)
+print("Got generator")
+if lora is not None:
+    generator.set_loras(lora)
 
-# # Active sequences and corresponding caches and settings
-# prompts = queue.Queue()
-# responses = {}
-# prompt_length = {}
-# # Global variable for storing partial responses
-# partial_responses = {}
+# Active sequences and corresponding caches and settings
+prompts = queue.Queue()
+responses = {}
+prompt_length = {}
+# Global variable for storing partial responses
+partial_responses = {}
 
-# # Create jobs
-# STATUS_LINES = term.height-8  # Number of lines to dedicate for status messages
-# LLM_LINES = max_batch_size
-# status_area = StatusArea(STATUS_LINES)
-# displays = {}
-# prompt_ids2jobs = {}
-# cancelled_request_ids = []
+# Create jobs
+STATUS_LINES = term.height-8  # Number of lines to dedicate for status messages
+LLM_LINES = max_batch_size
+status_area = StatusArea(STATUS_LINES)
+displays = {}
+prompt_ids2jobs = {}
+cancelled_request_ids = []
