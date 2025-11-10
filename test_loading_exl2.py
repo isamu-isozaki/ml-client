@@ -837,6 +837,6 @@ async def get_nvidia_smi():
     return gpu_data
 
 
-# if __name__ == "__main__":
-#     uvicorn.run(app, host=host, port=port, log_level="error")
-#     print(term.enter_fullscreen())
+if __name__ == "__main__":
+    uvicorn.run(app, host=host, port=port, log_level="info")
+    print(term.enter_fullscreen())
