@@ -626,9 +626,7 @@ def process_prompts():
                                 "choices": [
                                     {
                                         "index": 0,
-                                        "delta": {
-                                            "content": outcontent
-                                        },
+                                        "text": outcontent,
                                         "finish_reason": None
                                     }
                                 ]
