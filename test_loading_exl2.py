@@ -515,326 +515,326 @@ app = FastAPI(title="EXL2")
 app.add_middleware(RequestLoggerMiddleware)
 app.add_middleware(RequestCancelledMiddleware)
 
-# async def stream_response(prompt_id, timeout=180):
-#     global partial_responses
-#     while True:
-#         await asyncio.sleep(0.05)  # Sleep to yield control to the event loop
+async def stream_response(prompt_id, timeout=180):
+    global partial_responses
+    while True:
+        await asyncio.sleep(0.05)  # Sleep to yield control to the event loop
 
-#         # Check if prompt_id exists in partial_responses
-#         if prompt_id in partial_responses:
-#             # Stream partial responses
-#             while partial_responses[prompt_id]:
-#                 response_chunk = partial_responses[prompt_id].pop(0)
-#                 yield f"data: {json.dumps(response_chunk)}\n\n"
+        # Check if prompt_id exists in partial_responses
+        if prompt_id in partial_responses:
+            # Stream partial responses
+            while partial_responses[prompt_id]:
+                response_chunk = partial_responses[prompt_id].pop(0)
+                yield f"data: {json.dumps(response_chunk)}\n\n"
 
-#             # Check for final response or timeout
-#             if prompt_id in responses:
-#                 final_response = responses.pop(prompt_id)
-#                 yield f'data: {{"id":"chatcmpl-{prompt_id}","object":"chat.completion.chunk","created":{int(time.time())},"model":"{repo_str}","choices":[{{"index":0,"delta":{{}},"finish_reason":"stop"}}]}}\n\n'
-#                 break
-
-
-# def process_prompts():
-#     global partial_responses
-#     global prompt_ids2jobs, prompt_length, cancelled_request_ids
-#     try:
-
-#         while True:
-#             while not prompts.empty() or len(prompt_length):
-#                 while len(prompt_length) < max_batch_size and not prompts.empty():
-#                     prompt_id, prompt, max_tokens, stream, temperature, outlines_dict = prompts.get()
-#                     stop = outlines_dict.get("stop", None)
-#                     if outlines_dict["type"] == "choices":
-#                         filters = [ChoiceFilter(outlines_dict["choices"], hf_tokenizer)]
-#                     elif outlines_dict["type"] == "json":
-#                         filters = [JSONFilter(outlines_dict["json"], hf_tokenizer)]
-#                     elif outlines_dict["type"] == "regex":
-#                         # Validation of regex
-#                         filters = [RegexFilter(outlines_dict["regex"], hf_tokenizer)]
-#                     else:
-#                         filters = []
-#                     ids = tokenizer.encode(prompt, encode_special_tokens = True)
-#                     prompt_tokens = ids.shape[-1]
-#                     new_tokens = prompt_tokens + max_tokens
-#                     #print("Processing prompt: " + str(prompt_id) + "  Req tokens: " + str(new_tokens))
-#                     status_area.update(f"Processing prompt: {prompt_id}  Req tokens: {new_tokens}", line=STATUS_LINES-1)
-#                     # Truncate if new_tokens exceed max_context
-#                     if new_tokens > max_context:
-#                         # Calculate how many tokens to truncate
-#                         ids = tokenizer.encode("Say, 'Prompt exceeds allowed length. Please try again.'")
-#                         # Update new_tokens after truncation
-#                         prompt_tokens = ids.shape[-1]
-#                         new_tokens = prompt_tokens + max_tokens
-#                         print("Truncating prompt: " + str(prompt_id) + "  Req tokens: " + str(new_tokens))
-#                     prompt_length[prompt_id] = prompt_tokens
-#                     #streamer.append(stream)
-#                     #prompt_ids.append(prompt_id)
-
-#                     eos_token_ids = [tokenizer.eos_token_id, hf_tokenizer.eos_token_id]
-#                     # print("eos token ids", eos_token_ids)
-#                     if config_eos_token_ids is not None:
-#                         eos_token_ids.extend([int(c) for c in config_eos_token_ids.split(',')])
-#                     if stop is not None:
-#                         if isinstance(stop, list):
-#                             for stop_string in stop:
-#                                 eos_token_ids.append(stop_string)
-#                         else:
-#                             eos_token_ids.append(stop)  
-#                     gen_settings = ExLlamaV2Sampler.Settings()
-#                     gen_settings.temperature = 2.0 if temperature>2 else temperature  # To make sure the temperature value does not exceed 2
-
-#                     job = ExLlamaV2DynamicJob(
-#                         input_ids = ids,
-#                         max_new_tokens = max_tokens,
-#                         stop_conditions = eos_token_ids,
-#                         gen_settings = gen_settings,
-#                         filters = filters,
-#                         token_healing = healing
-#                     )
-
-#                     job.prompt_length = prompt_tokens
-#                     job.input_ids = ids
-#                     job.streamer = stream
-#                     job.prompt_ids = prompt_id
-#                     job.stop = stop
-
-#                     generator.enqueue(job)
-#                     #displays = { job: JobStatusDisplay(job, line, STATUS_LINES) for line, job in enumerate(jobs) }
-#                     displays[job] = JobStatusDisplay(job, STATUS_LINES)
-
-#                     for index, (job, display) in enumerate(list(displays.items())):
-#                         display.update_position(index%LLM_LINES)  # Set position before updating
-#                     prompt_ids2jobs[prompt_id] = job
-
-#                 if(len(prompt_length)):
-#                     results = generator.iterate()
-#                     for r in results:
-#                         job = r["job"]
-#                         displays[job].update(r)
-#                         displays[job].display()
-#                         stage = r["stage"]
-#                         stage = r.get("eos_reason", stage)
-#                         outcontent = r.get("text", "")
-#                         reason = None
-#                         if(job.streamer):
-
-#                             partial_response_data = {
-#                                 "id": f"chatcmpl-{job.prompt_ids}",
-#                                 "object": "chat.completion.chunk",
-#                                 "created": int(time.time()),
-#                                 "model": repo_str,
-#                                 "choices": [
-#                                     {
-#                                         "index": 0,
-#                                         "delta": {
-#                                             "content": outcontent
-#                                         },
-#                                         "finish_reason": None
-#                                     }
-#                                 ]
-#                             }
-
-#                             # Initialize a list for new prompt_id or append to existing one
-#                             if job.prompt_ids not in partial_responses:
-#                                 partial_responses[job.prompt_ids] = []
-#                             partial_responses[job.prompt_ids].append(partial_response_data)
-
-#                         if r['eos'] == True:
-#                             total_time = r['time_generate']
-#                             total_tokens = r['new_tokens']
-#                             tokens_per_second = total_tokens / total_time if total_time > 0 else 0
-#                             status_area.update(f"EOS detected: {stage}, Generated Tokens: {total_tokens}, Tokens per second: {tokens_per_second}/s", line=STATUS_LINES-2)
-
-#                             #generated_part = job.input_ids[:, job.prompt_length:]
-#                             #output = tokenizer.decode(generated_part[0]).strip()
-#                             #output = tokenizer.decode(input_ids[i])[0]
-#                             generated_text = r['full_completion']
-
-#                             # Calculate token counts
-#                             completion_tokens_old = (tokenizer.encode(generated_text)).shape[-1]
-
-#                             completion_tokens = r['new_tokens']
-#                             prompt_tokens = r['prompt_tokens']
-
-#                             full_tokens = completion_tokens + prompt_tokens
-#                             status_area.update(f"Completion Tokens: {completion_tokens_old}, New Completion Tokens: {completion_tokens}", line=STATUS_LINES-3)
+            # Check for final response or timeout
+            if prompt_id in responses:
+                final_response = responses.pop(prompt_id)
+                yield f'data: {{"id":"chatcmpl-{prompt_id}","object":"chat.completion.chunk","created":{int(time.time())},"model":"{repo_str}","choices":[{{"index":0,"delta":{{}},"finish_reason":"stop"}}]}}\n\n'
+                break
 
 
-#                             eos_prompt_id = job.prompt_ids
-#                             if(job.streamer):
-#                                 ## Generator, yield here..
-#                                 partial_response_data = {
-#                                     "finish_reason": "stop"
-#                                 }
+def process_prompts():
+    global partial_responses
+    global prompt_ids2jobs, prompt_length, cancelled_request_ids
+    try:
 
-#                                 responses[eos_prompt_id] = partial_response_data
-#                             else:# Construct the response based on the format
-#                                 response_data = {
-#                                     "id": f"chatcmpl-{eos_prompt_id}",
-#                                     "object": "chat.completion",
-#                                     "created": int(time.time()),
-#                                     "model": repo_str,
-#                                     "choices": [{
-#                                         "index": 0,
-#                                         "message": {
-#                                             "role": "assistant",
-#                                             "content": generated_text,
-#                                         },
-#                                         "finish_reason": "stop"
-#                                     }],
-#                                     "usage": {
-#                                         "prompt_tokens": prompt_tokens,
-#                                         "completion_tokens": completion_tokens,
-#                                         "total_tokens": full_tokens
-#                                     }
-#                                 }
-#                                 responses[eos_prompt_id] = response_data
-#                             del prompt_ids2jobs[eos_prompt_id]
-#                             del prompt_length[eos_prompt_id]
-#                     if len(cancelled_request_ids):
-#                         cancelled_id = cancelled_request_ids.pop()
-#                         status_area.update(f"Cancelling request due to disconnect prompt: {cancelled_id}", line=STATUS_LINES-1)
-#                         if cancelled_id in prompt_ids2jobs:
-#                             generator.cancel(prompt_ids2jobs[cancelled_id])
-#                             del prompt_ids2jobs[cancelled_id]
-#                             del prompt_length[cancelled_id]
-#                             status_area.update(f"Found and cancelling: {cancelled_id}", line=STATUS_LINES-1)
-#                         else: 
-#                             # Temporarily store items to check against cancelled_id
-#                             temp_storage = []
+        while True:
+            while not prompts.empty() or len(prompt_length):
+                while len(prompt_length) < max_batch_size and not prompts.empty():
+                    prompt_id, prompt, max_tokens, stream, temperature, outlines_dict = prompts.get()
+                    stop = outlines_dict.get("stop", None)
+                    if outlines_dict["type"] == "choices":
+                        filters = [ChoiceFilter(outlines_dict["choices"], hf_tokenizer)]
+                    elif outlines_dict["type"] == "json":
+                        filters = [JSONFilter(outlines_dict["json"], hf_tokenizer)]
+                    elif outlines_dict["type"] == "regex":
+                        # Validation of regex
+                        filters = [RegexFilter(outlines_dict["regex"], hf_tokenizer)]
+                    else:
+                        filters = []
+                    ids = tokenizer.encode(prompt, encode_special_tokens = True)
+                    prompt_tokens = ids.shape[-1]
+                    new_tokens = prompt_tokens + max_tokens
+                    #print("Processing prompt: " + str(prompt_id) + "  Req tokens: " + str(new_tokens))
+                    status_area.update(f"Processing prompt: {prompt_id}  Req tokens: {new_tokens}", line=STATUS_LINES-1)
+                    # Truncate if new_tokens exceed max_context
+                    if new_tokens > max_context:
+                        # Calculate how many tokens to truncate
+                        ids = tokenizer.encode("Say, 'Prompt exceeds allowed length. Please try again.'")
+                        # Update new_tokens after truncation
+                        prompt_tokens = ids.shape[-1]
+                        new_tokens = prompt_tokens + max_tokens
+                        print("Truncating prompt: " + str(prompt_id) + "  Req tokens: " + str(new_tokens))
+                    prompt_length[prompt_id] = prompt_tokens
+                    #streamer.append(stream)
+                    #prompt_ids.append(prompt_id)
 
-#                             # Drain the queue and check each item
-#                             while not prompts.empty():
-#                                 prompt_id, prompt, max_tokens, stream, temperature, outlines_dict = prompts.get()
-#                                 if prompt_id != cancelled_id:
-#                                     # Only requeue prompts that do not match the cancelled_id
-#                                     temp_storage.append((prompt_id, prompt, max_tokens, stream, temperature, outlines_dict))
+                    eos_token_ids = [tokenizer.eos_token_id, hf_tokenizer.eos_token_id]
+                    # print("eos token ids", eos_token_ids)
+                    if config_eos_token_ids is not None:
+                        eos_token_ids.extend([int(c) for c in config_eos_token_ids.split(',')])
+                    if stop is not None:
+                        if isinstance(stop, list):
+                            for stop_string in stop:
+                                eos_token_ids.append(stop_string)
+                        else:
+                            eos_token_ids.append(stop)  
+                    gen_settings = ExLlamaV2Sampler.Settings()
+                    gen_settings.temperature = 2.0 if temperature>2 else temperature  # To make sure the temperature value does not exceed 2
 
-#                             # Re-add the valid items back to the queue
-#                             for item in temp_storage:
-#                                 prompts.put(item)
+                    job = ExLlamaV2DynamicJob(
+                        input_ids = ids,
+                        max_new_tokens = max_tokens,
+                        stop_conditions = eos_token_ids,
+                        gen_settings = gen_settings,
+                        filters = filters,
+                        token_healing = healing
+                    )
+
+                    job.prompt_length = prompt_tokens
+                    job.input_ids = ids
+                    job.streamer = stream
+                    job.prompt_ids = prompt_id
+                    job.stop = stop
+
+                    generator.enqueue(job)
+                    #displays = { job: JobStatusDisplay(job, line, STATUS_LINES) for line, job in enumerate(jobs) }
+                    displays[job] = JobStatusDisplay(job, STATUS_LINES)
+
+                    for index, (job, display) in enumerate(list(displays.items())):
+                        display.update_position(index%LLM_LINES)  # Set position before updating
+                    prompt_ids2jobs[prompt_id] = job
+
+                if(len(prompt_length)):
+                    results = generator.iterate()
+                    for r in results:
+                        job = r["job"]
+                        displays[job].update(r)
+                        displays[job].display()
+                        stage = r["stage"]
+                        stage = r.get("eos_reason", stage)
+                        outcontent = r.get("text", "")
+                        reason = None
+                        if(job.streamer):
+
+                            partial_response_data = {
+                                "id": f"chatcmpl-{job.prompt_ids}",
+                                "object": "chat.completion.chunk",
+                                "created": int(time.time()),
+                                "model": repo_str,
+                                "choices": [
+                                    {
+                                        "index": 0,
+                                        "delta": {
+                                            "content": outcontent
+                                        },
+                                        "finish_reason": None
+                                    }
+                                ]
+                            }
+
+                            # Initialize a list for new prompt_id or append to existing one
+                            if job.prompt_ids not in partial_responses:
+                                partial_responses[job.prompt_ids] = []
+                            partial_responses[job.prompt_ids].append(partial_response_data)
+
+                        if r['eos'] == True:
+                            total_time = r['time_generate']
+                            total_tokens = r['new_tokens']
+                            tokens_per_second = total_tokens / total_time if total_time > 0 else 0
+                            status_area.update(f"EOS detected: {stage}, Generated Tokens: {total_tokens}, Tokens per second: {tokens_per_second}/s", line=STATUS_LINES-2)
+
+                            #generated_part = job.input_ids[:, job.prompt_length:]
+                            #output = tokenizer.decode(generated_part[0]).strip()
+                            #output = tokenizer.decode(input_ids[i])[0]
+                            generated_text = r['full_completion']
+
+                            # Calculate token counts
+                            completion_tokens_old = (tokenizer.encode(generated_text)).shape[-1]
+
+                            completion_tokens = r['new_tokens']
+                            prompt_tokens = r['prompt_tokens']
+
+                            full_tokens = completion_tokens + prompt_tokens
+                            status_area.update(f"Completion Tokens: {completion_tokens_old}, New Completion Tokens: {completion_tokens}", line=STATUS_LINES-3)
+
+
+                            eos_prompt_id = job.prompt_ids
+                            if(job.streamer):
+                                ## Generator, yield here..
+                                partial_response_data = {
+                                    "finish_reason": "stop"
+                                }
+
+                                responses[eos_prompt_id] = partial_response_data
+                            else:# Construct the response based on the format
+                                response_data = {
+                                    "id": f"chatcmpl-{eos_prompt_id}",
+                                    "object": "chat.completion",
+                                    "created": int(time.time()),
+                                    "model": repo_str,
+                                    "choices": [{
+                                        "index": 0,
+                                        "message": {
+                                            "role": "assistant",
+                                            "content": generated_text,
+                                        },
+                                        "finish_reason": "stop"
+                                    }],
+                                    "usage": {
+                                        "prompt_tokens": prompt_tokens,
+                                        "completion_tokens": completion_tokens,
+                                        "total_tokens": full_tokens
+                                    }
+                                }
+                                responses[eos_prompt_id] = response_data
+                            del prompt_ids2jobs[eos_prompt_id]
+                            del prompt_length[eos_prompt_id]
+                    if len(cancelled_request_ids):
+                        cancelled_id = cancelled_request_ids.pop()
+                        status_area.update(f"Cancelling request due to disconnect prompt: {cancelled_id}", line=STATUS_LINES-1)
+                        if cancelled_id in prompt_ids2jobs:
+                            generator.cancel(prompt_ids2jobs[cancelled_id])
+                            del prompt_ids2jobs[cancelled_id]
+                            del prompt_length[cancelled_id]
+                            status_area.update(f"Found and cancelling: {cancelled_id}", line=STATUS_LINES-1)
+                        else: 
+                            # Temporarily store items to check against cancelled_id
+                            temp_storage = []
+
+                            # Drain the queue and check each item
+                            while not prompts.empty():
+                                prompt_id, prompt, max_tokens, stream, temperature, outlines_dict = prompts.get()
+                                if prompt_id != cancelled_id:
+                                    # Only requeue prompts that do not match the cancelled_id
+                                    temp_storage.append((prompt_id, prompt, max_tokens, stream, temperature, outlines_dict))
+
+                            # Re-add the valid items back to the queue
+                            for item in temp_storage:
+                                prompts.put(item)
 
 
 
-#             else:
-#                 # Sleep for a short duration when there's no work
-#                 time.sleep(0.1)  # Sleep for 100 milliseconds
-#     except Exception as e:
-#         print("Reset server due to ", e)
-#         print(traceback.format_exc())
-#         for prompt_id in prompt_ids2jobs:
-#             job = prompt_ids2jobs[prompt_id]
-#             if(job.streamer):
-#                 ## Generator, yield here..
-#                 partial_response_data = {
-#                     "finish_reason": "stop"
-#                 }
+            else:
+                # Sleep for a short duration when there's no work
+                time.sleep(0.1)  # Sleep for 100 milliseconds
+    except Exception as e:
+        print("Reset server due to ", e)
+        print(traceback.format_exc())
+        for prompt_id in prompt_ids2jobs:
+            job = prompt_ids2jobs[prompt_id]
+            if(job.streamer):
+                ## Generator, yield here..
+                partial_response_data = {
+                    "finish_reason": "stop"
+                }
 
-#                 responses[prompt_id] = partial_response_data
-#             else:
-#                 print("Error handling for full generation current not implemented")
-#             generator.cancel(job)
-#         prompt_ids2jobs = {}
-#         prompt_length = {}
+                responses[prompt_id] = partial_response_data
+            else:
+                print("Error handling for full generation current not implemented")
+            generator.cancel(job)
+        prompt_ids2jobs = {}
+        prompt_length = {}
 
-# # Start worker thread
-# worker = Thread(target=process_prompts)
-# worker.start()
+# Start worker thread
+worker = Thread(target=process_prompts)
+worker.start()
 
-# async def do_completion(requestid: Request, prompt: str, request):
-#     try:
-#         timeout = 180  # seconds
-#         start_time = time.time()
-#         prompt_id = requestid.scope.get("extensions", {}).get("request_id", "Unknown ID")
-#         #prompt_id = generate_unique_id()
-#         status_area.update(f"Prompt: {prompt}, Prompt ID: {prompt_id}")
-#         outlines_dict = {}
+async def do_completion(requestid: Request, prompt: str, request):
+    try:
+        timeout = 180  # seconds
+        start_time = time.time()
+        prompt_id = requestid.scope.get("extensions", {}).get("request_id", "Unknown ID")
+        #prompt_id = generate_unique_id()
+        status_area.update(f"Prompt: {prompt}, Prompt ID: {prompt_id}")
+        outlines_dict = {}
         
-#         # Adjust temperature if it is 0
-#         if request.temperature == 0:
-#             request.temperature = 0.001
+        # Adjust temperature if it is 0
+        if request.temperature == 0:
+            request.temperature = 0.001
 
-#         if request.stop is not None:
-#             outlines_dict["stop"] = request.stop
-#         if request.outlines_type is not None:
-#             outlines_dict["type"] = request.outlines_type
-#         else:
-#             outlines_dict["type"] = "text"
-#         if outlines_dict["type"] == "choices":
-#             assert request.choices is not None
-#             outlines_dict["choices"] = request.choices
-#         elif outlines_dict["type"] == "json":
-#             assert request.json is not None
-#             outlines_dict["json"] = request.json
-#         elif outlines_dict["type"] == "regex":
-#             assert request.regex is not None
-#             outlines_dict["regex"] = request.regex
-#         else:
-#             assert outlines_dict["type"] == "text"
-#         prompts.put((prompt_id, prompt, request.max_tokens, request.stream, request.temperature, outlines_dict))
+        if request.stop is not None:
+            outlines_dict["stop"] = request.stop
+        if request.outlines_type is not None:
+            outlines_dict["type"] = request.outlines_type
+        else:
+            outlines_dict["type"] = "text"
+        if outlines_dict["type"] == "choices":
+            assert request.choices is not None
+            outlines_dict["choices"] = request.choices
+        elif outlines_dict["type"] == "json":
+            assert request.json is not None
+            outlines_dict["json"] = request.json
+        elif outlines_dict["type"] == "regex":
+            assert request.regex is not None
+            outlines_dict["regex"] = request.regex
+        else:
+            assert outlines_dict["type"] == "text"
+        prompts.put((prompt_id, prompt, request.max_tokens, request.stream, request.temperature, outlines_dict))
 
-#         if request.stream:
-#             #response = StreamingResponse(streaming_request(prompt, request.max_tokens, tempmodel=repo_str, response_format='chat_completion'), media_type="text/event-stream")
-#             return StreamingResponse(stream_response(prompt_id), media_type="text/event-stream")
-#         else:
-#             #response_data = non_streaming_request(prompt, request.max_tokens, tempmodel=repo_str, response_format='chat_completion')
-#             #response = response_data  # This will return a JSON response
-#             while prompt_id not in responses:
-#                 await asyncio.sleep(0.1)  # Sleep to yield control to the event loop
-#                 if (time.time() - start_time) > timeout:
-#                     return {"error": "Response timeout"} 
+        if request.stream:
+            #response = StreamingResponse(streaming_request(prompt, request.max_tokens, tempmodel=repo_str, response_format='chat_completion'), media_type="text/event-stream")
+            return StreamingResponse(stream_response(prompt_id), media_type="text/event-stream")
+        else:
+            #response_data = non_streaming_request(prompt, request.max_tokens, tempmodel=repo_str, response_format='chat_completion')
+            #response = response_data  # This will return a JSON response
+            while prompt_id not in responses:
+                await asyncio.sleep(0.1)  # Sleep to yield control to the event loop
+                if (time.time() - start_time) > timeout:
+                    return {"error": "Response timeout"} 
 
-#             return responses.pop(prompt_id)
+            return responses.pop(prompt_id)
 
-#     except Exception as e:
-#         print(traceback.format_exc())
-#         raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
     
-# @app.post('/v1/completions')
-# async def maincompletion(requestid: Request, request: CompletionRequest):
-#     print("got completions request")
-#     assert isinstance(request.prompt, str)
-#     return await do_completion(requestid, request.prompt, request)
+@app.post('/v1/completions')
+async def maincompletion(requestid: Request, request: CompletionRequest):
+    print("got completions request")
+    assert isinstance(request.prompt, str)
+    return await do_completion(requestid, request.prompt, request)
 
-# @app.post('/v1/chat/completions')
-# async def mainchat(requestid: Request, request: ChatCompletionRequest):
-#     print("got chat completions request")
-#     hf_get_messages = get_messages(request.messages)
-#     prompt = hf_tokenizer.apply_chat_template(hf_get_messages, tokenize=False, add_generation_prompt=True)
-#     if request.partial_generation is not None:
-#         prompt += request.partial_generation
-#     return await do_completion(requestid, prompt, request)
-
-
+@app.post('/v1/chat/completions')
+async def mainchat(requestid: Request, request: ChatCompletionRequest):
+    print("got chat completions request")
+    hf_get_messages = get_messages(request.messages)
+    prompt = hf_tokenizer.apply_chat_template(hf_get_messages, tokenize=False, add_generation_prompt=True)
+    if request.partial_generation is not None:
+        prompt += request.partial_generation
+    return await do_completion(requestid, prompt, request)
 
 
 
-# @app.get('/ping')
-# async def get_status():
-#     return {"ping": sum(prompt_length.values())}
 
-# @app.get("/nvidia-smi")
-# async def get_nvidia_smi():
-#     # Execute the nvidia-smi command
-#     result = subprocess.run(
-#         ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total", "--format=csv,noheader"],
-#         capture_output=True, text=True
-#     )
-#     nvidia_smi_output = result.stdout.strip()  # Remove any extra whitespace
-#     # Split the output by lines and then by commas
-#     gpu_data = []
-#     for line in nvidia_smi_output.split("\n"):
-#         utilization, memory_used, memory_total = line.split(", ")
-#         # Strip the '%' and 'MiB' and convert to appropriate types
-#         utilization = float(utilization.strip(' %'))
-#         memory_used = int(memory_used.strip(' MiB'))
-#         memory_total = int(memory_total.strip(' MiB'))
-#         gpu_data.append({
-#            "utilization": utilization,
-#            "memory_used": memory_used,
-#            "memory_total": memory_total
-#         })
-#     return gpu_data
+
+@app.get('/ping')
+async def get_status():
+    return {"ping": sum(prompt_length.values())}
+
+@app.get("/nvidia-smi")
+async def get_nvidia_smi():
+    # Execute the nvidia-smi command
+    result = subprocess.run(
+        ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total", "--format=csv,noheader"],
+        capture_output=True, text=True
+    )
+    nvidia_smi_output = result.stdout.strip()  # Remove any extra whitespace
+    # Split the output by lines and then by commas
+    gpu_data = []
+    for line in nvidia_smi_output.split("\n"):
+        utilization, memory_used, memory_total = line.split(", ")
+        # Strip the '%' and 'MiB' and convert to appropriate types
+        utilization = float(utilization.strip(' %'))
+        memory_used = int(memory_used.strip(' MiB'))
+        memory_total = int(memory_total.strip(' MiB'))
+        gpu_data.append({
+           "utilization": utilization,
+           "memory_used": memory_used,
+           "memory_total": memory_total
+        })
+    return gpu_data
 
 
 # if __name__ == "__main__":
