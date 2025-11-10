@@ -557,7 +557,7 @@ def process_prompts():
                     prompt_tokens = ids.shape[-1]
                     new_tokens = prompt_tokens + max_tokens
                     #print("Processing prompt: " + str(prompt_id) + "  Req tokens: " + str(new_tokens))
-                    status_area.update(f"Processing prompt: {prompt_id}  Req tokens: {new_tokens}", line=STATUS_LINES-1)
+                    status_area.update(f"Processing prompt: {prompt_id}  Req tokens: {new_tokens}  Temperature: {temperature}", line=STATUS_LINES-1)
                     # Truncate if new_tokens exceed max_context
                     if new_tokens > max_context:
                         # Calculate how many tokens to truncate
