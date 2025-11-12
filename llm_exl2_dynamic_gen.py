@@ -557,8 +557,11 @@ def process_prompts():
                     ids = tokenizer.encode(prompt, encode_special_tokens = True)
                     prompt_tokens = ids.shape[-1]
                     new_tokens = prompt_tokens + max_tokens
+                    if new_tokens > max_chunk_size:
+                        max_tokens -= (new_tokens-max_chunk_size)
+                        new_tokens = max_chunk_size
                     #print("Processing prompt: " + str(prompt_id) + "  Req tokens: " + str(new_tokens))
-                    status_area.update(f"Processing prompt: {prompt_id}  Req tokens: {new_tokens}  Temperature: {temperature}", line=STATUS_LINES-1)
+                    print(f"Processing prompt: {prompt_id}  Req tokens: {new_tokens} max tokens: {max_tokens} Temperature: {temperature}")
                     # Truncate if new_tokens exceed max_context
                     if new_tokens > max_context:
                         # Calculate how many tokens to truncate
